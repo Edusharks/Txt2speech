@@ -207,211 +207,236 @@
     <script src="https://code.responsivevoice.org/responsivevoice.js"></script>
     
     <script>
-        // DOM Elements
-        const librarySelect = document.getElementById('library-select');
-        const voiceSelect = document.getElementById('voice-select');
-        const textInput = document.getElementById('text-input');
-        const rateSlider = document.getElementById('rate-slider');
-        const rateValue = document.getElementById('rate-value');
-        const pitchSlider = document.getElementById('pitch-slider');
-        const pitchValue = document.getElementById('pitch-value');
-        const generateBtn = document.getElementById('generate-btn');
-        const statusMessage = document.getElementById('status-message');
-        const audioControls = document.getElementById('audio-controls');
-        const audioPlayer = document.getElementById('audio-player');
-        const downloadLink = document.getElementById('download-link');
-        const libraryInfo = document.getElementById('library-info');
+// DOM Elements
+const librarySelect = document.getElementById('library-select');
+const voiceSelect = document.getElementById('voice-select');
+const textInput = document.getElementById('text-input');
+const rateSlider = document.getElementById('rate-slider');
+const rateValue = document.getElementById('rate-value');
+const pitchSlider = document.getElementById('pitch-slider');
+const pitchValue = document.getElementById('pitch-value');
+const generateBtn = document.getElementById('generate-btn');
+const statusMessage = document.getElementById('status-message');
+const audioControls = document.getElementById('audio-controls');
+const audioPlayer = document.getElementById('audio-player');
+const downloadLink = document.getElementById('download-link');
+const libraryInfo = document.getElementById('library-info');
 
-        // Library info texts
-        const libraryInfoTexts = {
-            'speak-tts': 'speak-tts: Wrapper around Web Speech API with additional features including direct audio export',
-            'responsive-voice': 'responsive-voice: Provides more control over speech synthesis with multiple voice options',
-            'web-speech': 'Web Speech API: Native browser implementation with basic functionality',
-            'web-speech-recorder': 'Web Speech API with Recording: Extends native API with audio recording capability'
-        };
+// Library info texts
+const libraryInfoTexts = {
+    'speak-tts': 'speak-tts: Wrapper around Web Speech API with additional features including direct audio export',
+    'responsive-voice': 'responsive-voice: Provides more control over speech synthesis with multiple voice options',
+    'web-speech': 'Web Speech API: Native browser implementation with basic functionality',
+    'web-speech-recorder': 'Web Speech API with Recording: Extends native API with audio recording capability'
+};
 
-        // TTS Instances
-        const speakTTS = new SpeakTts();
-        let currentLibrary = null;
-        let audioContext;
-        let mediaRecorder;
-        let audioChunks = [];
-        let currentUtterance = null;
+// TTS Instances
+const speakTTS = new SpeakTts();
+let currentLibrary = null;
+let audioContext;
+let mediaRecorder;
+let audioChunks = [];
+let currentUtterance = null;
+let voicesLoaded = false;
 
-        // Initialize the app
-        document.addEventListener('DOMContentLoaded', function() {
-            // Event listeners
-            librarySelect.addEventListener('change', handleLibraryChange);
-            rateSlider.addEventListener('input', updateRateValue);
-            pitchSlider.addEventListener('input', updatePitchValue);
-            generateBtn.addEventListener('click', generateSpeech);
-            textInput.addEventListener('input', checkInputs);
-            
-            // Initialize values
-            updateRateValue();
-            updatePitchValue();
-            
-            // Initialize the first library
-            handleLibraryChange();
-        });
+// Initialize the app
+document.addEventListener('DOMContentLoaded', function() {
+    // Event listeners
+    librarySelect.addEventListener('change', handleLibraryChange);
+    rateSlider.addEventListener('input', updateRateValue);
+    pitchSlider.addEventListener('input', updatePitchValue);
+    generateBtn.addEventListener('click', generateSpeech);
+    textInput.addEventListener('input', checkInputs);
+    
+    // Initialize values
+    updateRateValue();
+    updatePitchValue();
+    
+    // Initialize the first library
+    handleLibraryChange();
+    
+    // Special handling for Web Speech API voices
+    if (window.speechSynthesis) {
+        // Some browsers need this to load voices
+        speechSynthesis.onvoiceschanged = loadVoicesWhenReady;
+        loadVoicesWhenReady(); // Try immediately
+    }
+});
 
-        function handleLibraryChange() {
-            currentLibrary = librarySelect.value;
-            libraryInfo.textContent = libraryInfoTexts[currentLibrary];
-            
-            // Reset UI
-            voiceSelect.innerHTML = '<option value="">Loading voices...</option>';
-            voiceSelect.disabled = true;
-            generateBtn.disabled = true;
-            audioControls.classList.remove('active');
-            downloadLink.classList.add('disabled');
-            downloadLink.removeAttribute('href');
-            
-            // Initialize the selected library
-            switch(currentLibrary) {
-                case 'speak-tts':
-                    initSpeakTTS();
-                    break;
-                case 'responsive-voice':
-                    initResponsiveVoice();
-                    break;
-                case 'web-speech':
-                    initWebSpeech();
-                    break;
-                case 'web-speech-recorder':
-                    initWebSpeechRecorder();
-                    break;
-            }
-            
-            checkInputs();
-        }
-
-        function updateRateValue() {
-            rateValue.textContent = rateSlider.value;
-        }
-
-        function updatePitchValue() {
-            pitchValue.textContent = pitchSlider.value;
-        }
-
-        function checkInputs() {
-            const textValid = textInput.value.trim().length > 0;
-            const voiceValid = voiceSelect.value || currentLibrary === 'responsive-voice';
-            generateBtn.disabled = !(textValid && voiceValid);
-        }
-
-        // Library Initialization Functions
-        function initSpeakTTS() {
-            speakTTS.init({
-                volume: 1,
-                lang: 'en-US',
-                rate: 1,
-                pitch: 1,
-                splitSentences: true,
-                listeners: {
-                    onvoiceschanged: (voices) => {
-                        populateVoiceSelect(voices);
-                    }
-                }
-            }).then(() => {
-                updateStatus('speak-tts initialized successfully', 'success');
-            }).catch(e => {
-                updateStatus('Failed to initialize speak-tts: ' + e.message, 'error');
-            });
-        }
-
-        function initResponsiveVoice() {
-            // ResponsiveVoice auto-initializes
-            updateStatus('responsive-voice ready', 'success');
-            
-            // Populate with responsive-voice voices
-            const voices = [
-                { name: 'US English Female', lang: 'en-US' },
-                { name: 'UK English Female', lang: 'en-GB' },
-                { name: 'US English Male', lang: 'en-US' },
-                { name: 'Spanish Female', lang: 'es-ES' }
-            ];
-            
+function loadVoicesWhenReady() {
+    const voices = window.speechSynthesis.getVoices();
+    if (voices.length > 0 && !voicesLoaded) {
+        voicesLoaded = true;
+        if (currentLibrary === 'web-speech' || currentLibrary === 'web-speech-recorder') {
             populateVoiceSelect(voices);
         }
+    }
+}
 
-        function initWebSpeech() {
-            if (!window.speechSynthesis) {
-                updateStatus('Web Speech API not supported in this browser', 'error');
-                return;
-            }
-            
-            // Wait for voices to load
-            speechSynthesis.onvoiceschanged = function() {
-                populateVoiceSelect(speechSynthesis.getVoices());
-            };
-            
-            // Try to get voices immediately
-            const voices = speechSynthesis.getVoices();
-            if (voices.length > 0) {
+function handleLibraryChange() {
+    currentLibrary = librarySelect.value;
+    libraryInfo.textContent = libraryInfoTexts[currentLibrary];
+    
+    // Reset UI
+    voiceSelect.innerHTML = '<option value="">Loading voices...</option>';
+    voiceSelect.disabled = true;
+    generateBtn.disabled = true;
+    audioControls.classList.remove('active');
+    downloadLink.classList.add('disabled');
+    downloadLink.removeAttribute('href');
+    
+    // Initialize the selected library
+    switch(currentLibrary) {
+        case 'speak-tts':
+            initSpeakTTS();
+            break;
+        case 'responsive-voice':
+            initResponsiveVoice();
+            break;
+        case 'web-speech':
+            initWebSpeech();
+            break;
+        case 'web-speech-recorder':
+            initWebSpeechRecorder();
+            break;
+    }
+    
+    checkInputs();
+}
+
+function initSpeakTTS() {
+    speakTTS.init({
+        volume: 1,
+        lang: 'en-US',
+        rate: 1,
+        pitch: 1,
+        splitSentences: true,
+        listeners: {
+            onvoiceschanged: (voices) => {
                 populateVoiceSelect(voices);
+                updateStatus('speak-tts initialized successfully', 'success');
             }
-            
-            updateStatus('Web Speech API ready', 'success');
         }
+    }).catch(e => {
+        updateStatus('Failed to initialize speak-tts: ' + e.message, 'error');
+    });
+}
 
-        function initWebSpeechRecorder() {
-            if (!window.speechSynthesis || !window.MediaRecorder) {
-                updateStatus('Web Speech API or MediaRecorder not supported', 'error');
-                return;
-            }
-            
-            // Wait for voices to load
-            speechSynthesis.onvoiceschanged = function() {
-                populateVoiceSelect(speechSynthesis.getVoices());
-            };
-            
-            // Try to get voices immediately
-            const voices = speechSynthesis.getVoices();
-            if (voices.length > 0) {
-                populateVoiceSelect(voices);
-            }
-            
-            updateStatus('Web Speech API with Recording ready', 'success');
-        }
+function initResponsiveVoice() {
+    // ResponsiveVoice auto-initializes
+    // Create mock voices list for responsive-voice
+    const voices = [
+        { name: 'US English Female', lang: 'en-US' },
+        { name: 'UK English Female', lang: 'en-GB' },
+        { name: 'US English Male', lang: 'en-US' },
+        { name: 'Spanish Female', lang: 'es-ES' },
+        { name: 'French Female', lang: 'fr-FR' }
+    ];
+    
+    populateVoiceSelect(voices);
+    updateStatus('responsive-voice ready', 'success');
+}
 
-        function populateVoiceSelect(voices) {
-            voiceSelect.innerHTML = '';
-            
-            if (!voices || voices.length === 0) {
-                voiceSelect.innerHTML = '<option value="">No voices available</option>';
-                voiceSelect.disabled = true;
-                return;
-            }
-            
-            // Group voices by language
-            const voiceGroups = {};
-            voices.forEach(voice => {
-                const lang = voice.lang || 'unknown';
-                if (!voiceGroups[lang]) {
-                    voiceGroups[lang] = [];
-                }
-                voiceGroups[lang].push(voice);
-            });
-            
-            // Add options grouped by language
-            for (const lang in voiceGroups) {
-                const optgroup = document.createElement('optgroup');
-                optgroup.label = lang;
-                
-                voiceGroups[lang].forEach(voice => {
-                    const option = document.createElement('option');
-                    option.value = voice.name || voice.voiceName || voice.voiceURI;
-                    option.textContent = voice.name || voice.voiceName || voice.voiceURI;
-                    optgroup.appendChild(option);
-                });
-                
-                voiceSelect.appendChild(optgroup);
-            }
-            
-            voiceSelect.disabled = false;
-            checkInputs();
+function initWebSpeech() {
+    if (!window.speechSynthesis) {
+        updateStatus('Web Speech API not supported in this browser', 'error');
+        return;
+    }
+    
+    // Check if voices are already loaded
+    const voices = speechSynthesis.getVoices();
+    if (voices.length > 0) {
+        populateVoiceSelect(voices);
+        updateStatus('Web Speech API ready', 'success');
+    } else {
+        updateStatus('Loading Web Speech voices...', 'info');
+        // The voiceschanged event will trigger population when voices load
+    }
+}
+
+function initWebSpeechRecorder() {
+    if (!window.speechSynthesis || !window.MediaRecorder) {
+        updateStatus('Web Speech API or MediaRecorder not supported', 'error');
+        return;
+    }
+    
+    // Check if voices are already loaded
+    const voices = speechSynthesis.getVoices();
+    if (voices.length > 0) {
+        populateVoiceSelect(voices);
+        updateStatus('Web Speech API with Recording ready', 'success');
+    } else {
+        updateStatus('Loading Web Speech voices...', 'info');
+        // The voiceschanged event will trigger population when voices load
+    }
+}
+
+function populateVoiceSelect(voices) {
+    // Filter out voices without language codes
+    voices = voices.filter(voice => voice.lang || voice.voiceURI);
+    
+    if (!voices || voices.length === 0) {
+        voiceSelect.innerHTML = '<option value="">No voices available</option>';
+        voiceSelect.disabled = true;
+        updateStatus('No voices found for selected library', 'error');
+        return;
+    }
+    
+    voiceSelect.innerHTML = '';
+    
+    // Group voices by language
+    const voiceGroups = {};
+    voices.forEach(voice => {
+        const lang = voice.lang || voice.voiceURI.split('-')[0] || 'unknown';
+        if (!voiceGroups[lang]) {
+            voiceGroups[lang] = [];
         }
+        voiceGroups[lang].push(voice);
+    });
+    
+    // Sort languages alphabetically
+    const sortedLangs = Object.keys(voiceGroups).sort();
+    
+    // Add default option
+    const defaultOption = document.createElement('option');
+    defaultOption.value = '';
+    defaultOption.textContent = 'Select a voice';
+    voiceSelect.appendChild(defaultOption);
+    
+    // Add options grouped by language
+    sortedLangs.forEach(lang => {
+        const optgroup = document.createElement('optgroup');
+        optgroup.label = lang;
+        
+        // Sort voices within each language group
+        voiceGroups[lang].sort((a, b) => {
+            const nameA = a.name || a.voiceName || a.voiceURI;
+            const nameB = b.name || b.voiceName || b.voiceURI;
+            return nameA.localeCompare(nameB);
+        });
+        
+        voiceGroups[lang].forEach(voice => {
+            const option = document.createElement('option');
+            option.value = voice.name || voice.voiceName || voice.voiceURI;
+            option.textContent = voice.name || voice.voiceName || voice.voiceURI;
+            
+            // Add voice language as data attribute
+            option.dataset.lang = voice.lang || lang;
+            
+            optgroup.appendChild(option);
+        });
+        
+        voiceSelect.appendChild(optgroup);
+    });
+    
+    voiceSelect.disabled = false;
+    checkInputs();
+    
+    // Auto-select first voice if none selected
+    if (voiceSelect.value === '' && voiceSelect.options.length > 1) {
+        voiceSelect.selectedIndex = 1;
+    }
+}
 
         // Speech Generation Functions
         async function generateSpeech() {
